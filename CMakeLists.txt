@@ -12,4 +12,4 @@ endif()
 add_executable(cplusplus_efficiency main.cpp)
 
 # Set compile options for -O0 (no optimization)
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -S -O0")

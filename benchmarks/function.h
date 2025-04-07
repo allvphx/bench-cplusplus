@@ -2,7 +2,7 @@
 #define FUNCTION_H
 
 // Regular function
-int regular_add(int a, int b) {
+__attribute__((noinline)) int regular_add(int a, int b) {
     return a + b;
 }
 
@@ -91,61 +91,41 @@ void measure_function_call_overhead(int num_operations) {
          / static_cast<double>(num_operations/1000.0)
          << " ns per k_call\n";
 
+    // Measuring indirect call overhead
+    auto start_indirect = high_resolution_clock::now();
+    for (int i = 0; i < num_operations; ++i) {
+      result += indirect_call(regular_add, 1, 2);
+    }
+    auto end_indirect = high_resolution_clock::now();
+    cout << "Indirect function call: "
+         << static_cast<double>(duration_cast<nanoseconds>(end_indirect - start_indirect).count())
+            / static_cast<double>(num_operations/1000.0)
+         << " ns per k_call\n";
+
+    // Measuring virtual call overhead
+    Base* obj = new Derived();
+    auto start_virtual = high_resolution_clock::now();
+    for (int i = 0; i < num_operations; ++i) {
+      result += obj->virtual_add(1, 2);
+    }
+    auto end_virtual = high_resolution_clock::now();
+    cout << "Virtual function call: "
+         << static_cast<double>(duration_cast<nanoseconds>(end_virtual - start_virtual).count())
+            / static_cast<double>(num_operations/1000.0)
+         << " ns per k_call\n";
+    delete obj;
+
+    // Measuring CRTP call overhead.
+    CRTPDerived crtp_obj;
+    auto start_crtp = high_resolution_clock::now();
+    for (int i = 0; i < num_operations; ++i) {
+      result += crtp_obj.crtp_function(1, 2);
+    }
+    auto end_crtp = high_resolution_clock::now();
+    cout << "CRTP function call: "
+         << static_cast<double>(duration_cast<nanoseconds>(end_crtp - start_crtp).count())
+            / static_cast<double>(num_operations/1000.0)
+         << " ns per k_call\n";
 }
-
-
-
-void measure_vfunc(int num_operations) {
-  // Measuring direct call overhead
-  volatile int result = 0;
-
-  auto start_direct = high_resolution_clock::now();
-  for (int i = 0; i < num_operations; ++i) {
-    result = regular_add(1, 2);
-  }
-  auto end_direct = high_resolution_clock::now();
-  cout << "Direct function call: "
-       << static_cast<double>(duration_cast<nanoseconds>(end_direct - start_direct).count())
-       / static_cast<double>(num_operations/1000)
-       << " ns per k_call\n";
-
-  // Measuring indirect call overhead
-  auto start_indirect = high_resolution_clock::now();
-  for (int i = 0; i < num_operations; ++i) {
-     result += indirect_call(regular_add, 1, 2);
-  }
-  auto end_indirect = high_resolution_clock::now();
-  cout << "Indirect function call: "
-       << static_cast<double>(duration_cast<nanoseconds>(end_indirect - start_indirect).count())
-       / static_cast<double>(num_operations/1000.0)
-       << " ns per k_call\n";
-
-  // Measuring virtual call overhead
-  Base* obj = new Derived();
-  auto start_virtual = high_resolution_clock::now();
-  for (int i = 0; i < num_operations; ++i) {
-    result += obj->virtual_add(1, 2);
-  }
-  auto end_virtual = high_resolution_clock::now();
-  cout << "Virtual function call: "
-       << static_cast<double>(duration_cast<nanoseconds>(end_virtual - start_virtual).count())
-       / static_cast<double>(num_operations/1000.0)
-       << " ns per k_call\n";
-  delete obj;
-
-  // Measuring CRTP call overhead.
-  // 奇异递归模板模式：
-  CRTPDerived crtp_obj;
-  auto start_crtp = high_resolution_clock::now();
-  for (int i = 0; i < num_operations; ++i) {
-    result += crtp_obj.crtp_function(1, 2);
-  }
-  auto end_crtp = high_resolution_clock::now();
-  cout << "CRTP function call: "
-       << static_cast<double>(duration_cast<nanoseconds>(end_crtp - start_crtp).count())
-       / static_cast<double>(num_operations/1000.0)
-       << " ns per k_call\n";
-}
-
 
 #endif //FUNCTION_H

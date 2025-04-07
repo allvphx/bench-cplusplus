@@ -58,12 +58,51 @@ Regular function calls are the most basic form of function invocation. The typic
 - **5. Return and retrieve result via return register**: (e.g., eax on x86).
 - **6. Pop stack and return control**: recover PC to the function call place.
 
+```asm
+# ./benchmarks/function.h:66:         result += regular_add(1, 2);
+	movl	$2, %esi	# step 1
+	movl	$1, %edi	# step 1
+	call	_Z11regular_addii	# step 2-6
+	
+_Z11regular_addii:
+.LFB3700:
+	.cfi_startproc
+	endbr64	
+	pushq	%rbp	# step 2: Save old pointer as return address
+	.cfi_def_cfa_offset 16 # step 3: Setup stack frame.
+	.cfi_offset 6, -16
+	movq	%rsp, %rbp	# step 3: Jump to func.
+	.cfi_def_cfa_register 6
+	movl	%edi, -4(%rbp)	# step 4: Retreive a
+	movl	%esi, -8(%rbp)	# step 4: Retreive b
+# ./benchmarks/function.h:6:     return a + b;
+	movl	-4(%rbp), %edx	# step 4: Load a
+	movl	-8(%rbp), %eax	# step 4: Load b
+	addl	%edx, %eax	# step 4: Compute a+b
+# ./benchmarks/function.h:7: }
+	popq	%rbp	# step 5 skipped as result is already in %eax.
+	                # step 6: pop stack and return control
+	.cfi_def_cfa 7, 8
+	ret	
+	.cfi_endproc
+```
+
 This involves stack manipulation and several memory accesses. According to Efficient C++, typical cost is 25–250 CPU cycles, but in practice, calls with few parameters usually take 15–30 cycles.
 
 ### Inline Function Calls
 Inline functions are expanded at compile-time, meaning function body is copied to call site, and thus:
-- No actual call or jump occurs. (step 3, 4, and 6) --- *better code & cache locality*.
-- No stack frame is pushed/popped. (step 1, 2, 5, and 6) --- *less commands and stack operations*.
+- No actual call or jump occurs. (step 1, 3, 5, and 6) --- *better code & cache locality*.
+- No stack frame is pushed/popped. (step 2, 3 and 6) --- *less commands and stack operations*.
+- Only step 4 remains!
+
+```asm
+	movl	$1, -176(%rbp)	#, a
+	movl	$2, -172(%rbp)	#, b
+# ./benchmarks/function.h:16:     return a + b;
+	movl	-176(%rbp), %edx	# a, tmp177
+	movl	-172(%rbp), %eax	# b, tmp178
+	addl	%eax, %edx	# tmp178, D.109316
+```
 
 This reduces overhead and improves performance, especially for small and frequently used functions.
 However, the inline keyword is just a hint. For critical code paths, use compiler directives:
@@ -83,6 +122,29 @@ Despite CPU predictors improving, misprediction costs can be 10–30 cycles. Ove
 - Jump via pointer. 
 - Break in instruction pipeline.
 
+```asm
+_Z13indirect_callPFiiiEii:
+.LFB3707:
+	.cfi_startproc
+	.... # the same step 2 - 3 as 
+	.cfi_def_cfa_register 6
+	subq	$16, %rsp	#,
+	movq	%rdi, -8(%rbp)	# func, func
+	movl	%esi, -12(%rbp)	# a, a
+	movl	%edx, -16(%rbp)	# b, b
+# ./benchmarks/function.h:56:   return func(a, b);
+	movl	-16(%rbp), %edx	# b, tmp84
+	movl	-12(%rbp), %eax	# a, tmp85
+	movq	-8(%rbp), %rcx	# func, tmp86
+	movl	%edx, %esi	# tmp84,
+	movl	%eax, %edi	# tmp85,
+	call	*%rcx	# tmp86
+# ./benchmarks/function.h:57: }
+	leave	
+	.cfi_def_cfa 7, 8
+	ret	
+	.cfi_endproc
+```
 
 ### Virtual Function Calls
 Used in OOP with inheritance and polymorphism. Key characteristics:
