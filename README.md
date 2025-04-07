@@ -33,4 +33,5 @@ make
 
 ```shell
 ./cplusplus_efficiency
+taskset -c 0 ./cplusplus_efficiency
 ```

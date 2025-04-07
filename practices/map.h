@@ -214,7 +214,7 @@ std::vector<int> generate_continous_ints(size_t count) {
 }
 
 
-void benchmark_map_continous() {
+void benchmark_map() {
     const size_t NUM_OPERATIONS = 10000;
 
     // Generate random keys and values

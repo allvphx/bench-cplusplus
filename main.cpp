@@ -1,21 +1,18 @@
-#include <iostream>
-#include <chrono>
-
-#include "allocation.h"
-#include "hardware.h"
-#include "function.h"
-#include "practice.h"
+#include "./benchmarks/allocation.h"
+#include "./benchmarks/hardware.h"
+#include "./benchmarks/function.h"
+#include "./practices/map.h"
 
 using namespace std;
 using namespace std::chrono;
 
 // Main function
 int main() {
-  constexpr int num_operations = 100000;
-  test_all_hardware_related(num_operations);
+  constexpr int num_operations = 100000000;
+//  test_all_hardware_related(num_operations);
   measure_function_call_overhead(num_operations);
   measure_vfunc(num_operations);
-  test_allocation(num_operations);
-  benchmark_map_continous();
+//  test_allocation(num_operations);
+//  benchmark_map();
   return 0;
 }
