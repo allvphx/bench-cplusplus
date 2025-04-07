@@ -35,3 +35,8 @@ make
 ./cplusplus_efficiency
 taskset -c 0 ./cplusplus_efficiency
 ```
+
+## Benchmark APIs
+
+For more details about the benchmarking functions, please refer to:
+- **Function Call**: [here](./notes/function_call.md).

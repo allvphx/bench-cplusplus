@@ -48,7 +48,7 @@ CRTP function call: 14.3 ns per k_call
 ## 📖 Function Call Internals & Analysis
 We’ve covered low-level hardware aspects in `hardware.h`, let’s examine common software-level abstractions and how much resource they consume in typical C/C++ function calls.
 
-### Regular Function Calls
+### ✅ Regular Function Calls
 
 Regular function calls are the most basic form of function invocation. The typical steps include:
 - **1. Push parameters**: Arguments are passed via the stack or registers (depends on calling convention). 
@@ -68,20 +68,18 @@ _Z11regular_addii:
 .LFB3700:
 	.cfi_startproc
 	endbr64	
-	pushq	%rbp	# step 2: Save old pointer as return address
-	.cfi_def_cfa_offset 16 # step 3: Setup stack frame.
+	pushq	%rbp				# step 2: Save old pointer as return address
+	.cfi_def_cfa_offset 16 		# step 3: Setup stack frame.
 	.cfi_offset 6, -16
-	movq	%rsp, %rbp	# step 3: Jump to func.
+	movq	%rsp, %rbp			# step 3: Jump to func.
 	.cfi_def_cfa_register 6
-	movl	%edi, -4(%rbp)	# step 4: Retreive a
-	movl	%esi, -8(%rbp)	# step 4: Retreive b
-# ./benchmarks/function.h:6:     return a + b;
-	movl	-4(%rbp), %edx	# step 4: Load a
-	movl	-8(%rbp), %eax	# step 4: Load b
-	addl	%edx, %eax	# step 4: Compute a+b
-# ./benchmarks/function.h:7: }
-	popq	%rbp	# step 5 skipped as result is already in %eax.
-	                # step 6: pop stack and return control
+	movl	%edi, -4(%rbp)		# step 4: Retreive a
+	movl	%esi, -8(%rbp)		# step 4: Retreive b
+	movl	-4(%rbp), %edx		# step 4: Load a
+	movl	-8(%rbp), %eax		# step 4: Load b
+	addl	%edx, %eax			# step 4: Compute a+b
+	popq	%rbp				# step 5 skipped as result is already in %eax.
+	                			# step 6: pop stack and return control
 	.cfi_def_cfa 7, 8
 	ret	
 	.cfi_endproc
@@ -89,19 +87,19 @@ _Z11regular_addii:
 
 This involves stack manipulation and several memory accesses. According to Efficient C++, typical cost is 25–250 CPU cycles, but in practice, calls with few parameters usually take 15–30 cycles.
 
-### Inline Function Calls
+
+### 🚀 Inline Function Calls
 Inline functions are expanded at compile-time, meaning function body is copied to call site, and thus:
 - No actual call or jump occurs. (step 1, 3, 5, and 6) --- *better code & cache locality*.
 - No stack frame is pushed/popped. (step 2, 3 and 6) --- *less commands and stack operations*.
 - Only step 4 remains!
 
 ```asm
-	movl	$1, -176(%rbp)	#, a
-	movl	$2, -172(%rbp)	#, b
-# ./benchmarks/function.h:16:     return a + b;
-	movl	-176(%rbp), %edx	# a, tmp177
-	movl	-172(%rbp), %eax	# b, tmp178
-	addl	%eax, %edx	# tmp178, D.109316
+	movl	$1, -176(%rbp)
+	movl	$2, -172(%rbp)
+	movl	-176(%rbp), %edx
+	movl	-172(%rbp), %eax
+	addl	%eax, %edx
 ```
 
 This reduces overhead and improves performance, especially for small and frequently used functions.
@@ -111,54 +109,119 @@ However, the inline keyword is just a hint. For critical code paths, use compile
 
 Inlining can also enable better instruction reordering and improved cache locality.
 
-### Indirect Function Calls
+### 🧭 Indirect Function Calls
 
 Involves calling through a function pointer, which introduces:
 - Pointer dereference overhead. 
 - Loss of branch prediction efficiency if the target varies.
 
 Despite CPU predictors improving, misprediction costs can be 10–30 cycles. Overhead comes from:
-- Runtime resolution of function address. 
-- Jump via pointer. 
-- Break in instruction pipeline.
+- Runtime resolution of function address. (Extra 1, 2, 3)
+- Jump via pointer. (Extra 4)
+- Break in instruction pipeline. (Extra 4)
 
 ```asm
 _Z13indirect_callPFiiiEii:
 .LFB3707:
 	.cfi_startproc
-	.... # the same step 2 - 3 as 
-	.cfi_def_cfa_register 6
-	subq	$16, %rsp	#,
-	movq	%rdi, -8(%rbp)	# func, func
-	movl	%esi, -12(%rbp)	# a, a
-	movl	%edx, -16(%rbp)	# b, b
-# ./benchmarks/function.h:56:   return func(a, b);
-	movl	-16(%rbp), %edx	# b, tmp84
-	movl	-12(%rbp), %eax	# a, tmp85
-	movq	-8(%rbp), %rcx	# func, tmp86
-	movl	%edx, %esi	# tmp84,
-	movl	%eax, %edi	# tmp85,
-	call	*%rcx	# tmp86
-# ./benchmarks/function.h:57: }
+	.... 						# Extra 1: setup the stack frame for indirect function.
+	movq	%rdi, -8(%rbp)		# Extra 1: store the function pointer to local stack.
+	movl	%esi, -12(%rbp)		# Extra 1: store a, b parameters to local stack.
+	movl	%edx, -16(%rbp)
+	movl	-16(%rbp), %edx		# Extra 2: load a and b to registers.
+	movl	-12(%rbp), %eax
+	movq	-8(%rbp), %rcx		# Extra 3: load function pointer.
+	movl	%edx, %esi			# step 1: store a and b.
+	movl	%eax, %edi
+	call	*%rcx				# Extra 4: indirect jump with pointer. Goes to step 2, 3, 4, 5, 6
 	leave	
 	.cfi_def_cfa 7, 8
 	ret	
 	.cfi_endproc
 ```
 
-### Virtual Function Calls
+### 🧱 Virtual Function Calls
 Used in OOP with inheritance and polymorphism. Key characteristics:
 - Each object has a vtable pointer. 
 - Function resolution happens at runtime through the vtable. 
 - Cost includes vtable lookup + indirect jump.
 
 Measured cost can be 2× that of a direct function call for small functions. Virtual functions have:
-- **Additional memory read**: vtable pointer lookup.
-- **Branch misprediction risk**: due to vtable, the branch prediction is harder.
-- **Poorer inlining opportunities**: since a function code can direct to multiple possible function implementations.
+- **Additional memory read**: vtable pointer lookup. (Extra 1, 2, 3)
+- **Branch misprediction risk**: due to vtable, the branch prediction is harder. (Extra 4)
+- **Poorer inlining opportunities**: since a function code can direct to multiple possible function implementations. (Extra 1, 2)
+
+```asm
+	movq	-40(%rbp), %rax	# Extra 1: dereference the first 8 bytes of the object, which stores the vptr.
+	movq	(%rax), %rax	#
+	movq	(%rax), %rcx	# Extra 2: load the first function pointer in vtable.
+	movq	-40(%rbp), %rax	# Extra 3: setup function pointer and parameters.
+	movl	$2, %edx
+	movl	$1, %esi
+	movq	%rax, %rdi		# Necessary steps: store this pointer as parameter.
+	call	*%rcx			# Extra 4: branch predction harder.
+```
+
+#### Object Layout with Virtual Func
+
+In case of multiple inheritance and multiple vfunc, the vtable reference could be more complex.
+
+For example, a object with multiple virtual functions:
+```c++
+class Base {
+public:
+    virtual void f1();
+    virtual void f2();
+};
+```
+
+The object layout of Base:
+
+```php
+Object Layout:
+[0x00] → vptr  → vtable_Base = {
+                       &Base::f1,   // vtable[0]
+                       &Base::f2    // vtable[1]
+                   }
+```
 
 
-### CRTP (Curiously Recurring Template Pattern)
+Another example, a class with inheritance:
+```c++
+class A {
+public:
+    virtual void a();
+    int x;
+};
+
+class B {
+public:
+    virtual void b();
+    int y;
+};
+
+class C : public A, public B {
+public:
+    void a() override;
+    void b() override;
+    int z;
+};
+```
+
+The object layout of C:
+
+```php
+[ C object ]
+Offset   Field
+───────  ──────────────────────────────────────
+0x00     vptr_A → vtable_C_for_A = { &C::a }
+0x08     A::x
+0x10     vptr_B → vtable_C_for_B = { &C::b }
+0x18     B::y
+0x20     C::z
+```
+
+### 🧬 CRTP (Curiously Recurring Template Pattern)
 
 A compile-time polymorphism technique where a base class is templated on the derived class:
 ```c++
@@ -169,6 +232,23 @@ class Base {
    }
 };
 ```
+
+The execution (with `inline`):
+```asm
+	movl	$1, -168(%rbp)			# step 1
+	movl	$2, -164(%rbp)
+	leaq	-205(%rbp), %rax		# Necessary steps: load the object pointer and store as this pointer.
+	movq	%rax, -32(%rbp)
+	movl	-168(%rbp), %eax		# step 2: load a and set for function.
+	movl	%eax, -160(%rbp)
+	movl	-164(%rbp), %eax		# step 2: load b and set for function.
+	movl	%eax, -156(%rbp)
+	movl	-160(%rbp), %edx		# step 4: execute function
+	movl	-156(%rbp), %eax
+	addl	%eax, %edx
+	nop	
+```
+
 #### Benefits: 
 - **Zero overhead polymorphism**: during compilation, `Base<Derived>` is instantiated. Thus no need for vtable lookup, etc. As the function resolution is static, there is no runtime dispatch overhead.
 - **Inlining-friendly**: can use inline as the code is static cast `static_cast<Derived*>`. 
