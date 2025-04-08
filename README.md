@@ -39,4 +39,4 @@ taskset -c 0 ./cplusplus_efficiency
 ## Benchmark APIs
 
 For more details about the benchmarking functions, please refer to:
-- **Function Call**: [here](./notes/function_call.md).
+- [Function Call](./notes/function_call.md): complexity v.s. efficiency (virtual and CDPR), binary size v.s. efficiency (non-inline and inline), flexibility v.s. efficiency (indirect calls and regular calls, CDPR and virtual).
